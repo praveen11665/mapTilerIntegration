@@ -1,120 +1,102 @@
 <?php
-phpinfo();
-  $servername = "localhost";  /* enter server name*/
-  $username = "root";  /* enter server user name*/
-  $password = "";   /* enter server user password*/
-  $dbname = "map";   /* enter database name to access table*/
+  $conn      = require 'connect.php'; /**/
 
-  // Create connection
-  $conn = new mysqli($servername, $username, $password, $dbname);
-  // Check connection
-  if ($conn->connect_error) {
-      die("Connection failed: " . $conn->connect_error);
-  }
-
-  $sql = "SELECT longitude, latitude FROM map_details"; /* Select query from DB*/
-  $result = $conn->query($sql);
-
-  $mapRows = [];
-  if ($result->num_rows > 0) {  /*Checking the rows in db*/
-      $mapRows = $result->fetch_all(MYSQLI_ASSOC);  /*Fetch all rows as associate array*/
-  }
-
-  $conn->close(); /* CLose connection*/
+  // fetch device data with group of device name from db.
+  $devices = fetch_device_data($conn);
+  
 ?>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <title>MapTiler</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <head>
+    <title>MapTiler</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-  <!-- Maptiler Javascript JS module -->
-  <script src="./node_modules/maplibre-gl/dist/maplibre-gl.js"></script>
-  <link href="./node_modules/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet" />
-  
-  <!-- Bootstrap CDN -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Bootstrap CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>  
 
-  <style type="text/css">
-    .map-layout {
-      margin-top: 5rem;
-      width: 1350px;
-      height: 350px;
-    }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="row mt-3">
-        <div class="col-4">
-          <label for="longitude" class="form-label">Longitude:</label>
-          <input class="form-control" value="80.237617" id="longitude" placeholder="Enter longitude" name="longitude">
+    <style type="text/css">
+      .table-scroll {
+        max-height: calc(100vh - 150px);
+        overflow: auto;
+      }
+
+      :root {
+        --scroll-bar-color: #c5c5c5;
+        --scroll-bar-bg-color: #f6f6f6;
+      }
+
+      ::-webkit-scrollbar-corner { background: rgba(0,0,0,0.5); }      
+
+      *::-webkit-scrollbar {
+        width: 12px;
+        height: 12px;
+      }
+
+      *::-webkit-scrollbar-track {
+        background: var(--scroll-bar-bg-color);
+      }
+
+      *::-webkit-scrollbar-thumb {
+        background-color: var(--scroll-bar-color);
+        border-radius: 20px;
+        border: 3px solid var(--scroll-bar-bg-color);
+      }
+      .table-viewport {
+        height: calc(90vh - 100px);
+        width: calc(35vw - 10px);
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container mt-4">
+
+      <h3>Device Details</h3>
+      <div class="card table-viewport">
+        <div class="card-body">
+          <div class="row mt-3">
+            <div class="table-scroll">          
+              <table class="table table-sm table-bordered">
+                <thead>
+                  <tr>
+                    <th>S.No</th>
+                    <th>Device Name</th>                
+                  </tr>
+                </thead>
+                <tbody>
+                  <?php
+                    $count = 1;
+                    if(empty($devices)) {
+                        ?>
+                          <tr>
+                            <td class="text-muted text-center" colspan="2">
+                              No records found
+                            </td>
+                          </tr>
+                        <?php
+                    } else {
+                      foreach ($devices as $device) {
+                        ?>
+                          <tr>
+                            <td><?php echo $count++ ?></td>
+                            <td>
+                              <a style="text-decoration: none;" data-bs-toggle="tooltip" title='View device details' href="device_details.php?device=<?php echo $device['device_name'] ?>" class="btn btn-sm btn-link">
+                                <?php echo $device['device_name'] ?>
+                              </a>
+                            </td>
+                          </tr>
+                        <?php
+                      }
+                    }
+                  ?>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
-        <div class="col-4">
-          <label for="latitude" class="form-label">Latitude:</label>
-          <input class="form-control" value="13.067439" id="latitude" placeholder="Enter latitude" name="latitude">
-        </div>
-        <div class="col-4 mt-4">
-          <button onclick="searchInMap()" class="btn btn-outline-success">Search</button>
-        </div>
+      </div>
     </div>
-    
-    <div id="map" class="map-layout">
-      
-    </div>
-      
-  </div>
-  <script>
-    const mapData = <?php echo json_encode($mapRows); ?>;
-    const baseUrl = `http://localhost:3650/api/maps/basic/style.json`  /* Local maptiler server's vector style url*/
-    /*default view point center*/
-    const centerLogLat = [80.237617, 13.067439]  // [Longitude, Latitude]
-
-    /*This will create map based on json data from local server*/
-    const map = new maplibregl.Map({
-      container: 'map', // container's id or the HTML element in which MapLibre GL JS will render the map
-      style: baseUrl, // style URL
-      center: centerLogLat, // starting position [lng, lat]
-      zoom: 5, // starting zoom
-    });
-    map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-    mapData.map(function(item){  /* This map function fetched db long/latt data and marked it in map*/
-
-      /*This will create marker in map*/
-      new maplibregl.Marker({
-        color: "#eb4c2a", /*Marker color*/
-        draggable: true  /*Marked marker can able to drag*/
-      }).setLngLat([item.longitude, item.latitude])
-      .addTo(map);
-
-      return item
-    })
-
-    function searchInMap(event) { /*This function is used for active search in map of given long and lat*/
-      /*Below code read the input value from html*/
-      var latitude = document.getElementById("latitude").value
-      var longitude = document.getElementById("longitude").value
-
-      /*This will create marker dynamically on map*/
-      const map = new maplibregl.Map({
-        container: 'map', // container's id or the HTML element in which MapLibre GL JS will render the map
-        style: baseUrl, // style URL
-        center: [longitude, latitude], // starting position [lng, lat]
-        zoom: 5, // starting zoom
-      });
-      map.addControl(new maplibregl.NavigationControl(), 'top-right');
-
-      new maplibregl.Marker({
-        color: "#eb4c2a",
-        draggable: true
-      }).setLngLat([longitude, latitude])
-      .addTo(map);
-      
-    }
-
-  </script>
-</body>
+  </body>
 </html>
